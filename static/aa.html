@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>扫码登录</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/axios@1.5.0/dist/axios.min.js"></script>
+  </head>
+  <body>
+    <img id="img" src="" alt="" />
+    <div id="info"></div>
+    <script>
+      async function refreshToken() {
+        const res = await axios.get('http://localhost:3000/user/refresh', {
+          params: {
+            refresh_token: localStorage.getItem('refresh_token'),
+          },
+        })
+        localStorage.setItem('access_token', res.data.access_token || '')
+        localStorage.setItem('refresh_token', res.data.refresh_token || '')
+        return res
+      }
+
+      let refreshing = false
+      let queue = []
+
+      axios.interceptors.response.use(
+        (response) => {
+          return response
+        },
+        async (error) => {
+          let { data, config } = error.response
+
+          if (refreshing) {
+            return new Promise((resolve) => {
+              queue.push({
+                config,
+                resolve,
+              })
+            })
+          }
+
+          if (
+            data.statusCode === 401 &&
+            !config.url.includes('/user/refresh')
+          ) {
+            refreshing = true
+            const res = await refreshToken()
+            refreshing = false
+
+            if (res.status === 200) {
+              queue.forEach(({ config, resolve }) => {
+                resolve(axios(config))
+              })
+              queue = []
+
+              return axios(config)
+            } else {
+              alert('登录过期，请重新登录')
+              return Promise.reject(res.data)
+            }
+          } else {
+            return error.response
+          }
+        },
+      )
+
+      axios.interceptors.request.use(function (config) {
+        const accessToken = localStorage.getItem('access_token')
+
+        if (accessToken) {
+          config.headers.authorization = 'Bearer ' + accessToken
+        }
+        return config
+      })
+      ;(async function () {
+        const ak = await axios.get('http://localhost:3000/aaa')
+        console.log({ ak })
+        try {
+          const fuck = await axios.get('http://localhost:3000/bbb', {})
+          console.log({ fuck })
+        } catch (e) {
+          console.log('get http://localhost:3000/bbb error')
+        }
+      })()
+    </script>
+  </body>
+</html>
